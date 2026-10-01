@@ -44,32 +44,51 @@ function CodeEditorPanel({
           onUploadFiles={onUploadFiles}
         />
 
-        <div className="min-w-0 flex-1">
-          {activeFile?.type === 'image' && (
-            <div className="flex h-full items-center justify-center p-4">
-              <img
-                src={activeFile.content}
-                alt={activeFile.name}
-                className="max-h-full max-w-full object-contain"
-              />
+        <div className="flex min-w-0 flex-1 flex-col">
+          {activeFile && (
+            <div
+              title={activeFile.name}
+              className="flex h-9 shrink-0 items-center border-b border-gray-800 bg-gray-900 px-4 font-mono text-sm"
+            >
+              {/* "css/theme.css" -> folder part dimmed, file name highlighted */}
+              {activeFile.name.includes('/') && (
+                <span className="truncate text-gray-500">
+                  {activeFile.name.slice(0, activeFile.name.lastIndexOf('/') + 1)}
+                </span>
+              )}
+              <span className="shrink-0 text-gray-100">
+                {activeFile.name.slice(activeFile.name.lastIndexOf('/') + 1)}
+              </span>
             </div>
           )}
 
-          {activeFile && activeFile.type !== 'image' && (
-            <Editor
-              height="100%"
-              theme="vs-dark"
-              path={activeFile.name}
-              language={activeFile.type}
-              value={activeFile.content}
-              onChange={(value) => onChangeFile(activeFile.name, value ?? '')}
-              options={{
-                fontSize: 14,
-                minimap: { enabled: false },
-                automaticLayout: true,
-              }}
-            />
-          )}
+          <div className="min-h-0 flex-1">
+            {activeFile?.type === 'image' && (
+              <div className="flex h-full items-center justify-center p-4">
+                <img
+                  src={activeFile.content}
+                  alt={activeFile.name}
+                  className="max-h-full max-w-full object-contain"
+                />
+              </div>
+            )}
+
+            {activeFile && activeFile.type !== 'image' && (
+              <Editor
+                height="100%"
+                theme="vs-dark"
+                path={activeFile.name}
+                language={activeFile.type}
+                value={activeFile.content}
+                onChange={(value) => onChangeFile(activeFile.name, value ?? '')}
+                options={{
+                  fontSize: 14,
+                  minimap: { enabled: false },
+                  automaticLayout: true,
+                }}
+              />
+            )}
+          </div>
         </div>
       </div>
     </section>
