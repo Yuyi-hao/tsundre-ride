@@ -1,5 +1,6 @@
 import Editor from '@monaco-editor/react'
 import type { CodeFile } from '../types/file'
+import { downloadFile, downloadZip } from '../utils/download'
 import FileExplorer from './FileExplorer'
 
 interface CodeEditorPanelProps {
@@ -27,10 +28,18 @@ function CodeEditorPanel({
 
   return (
     <section className="flex min-w-0 flex-1 flex-col bg-gray-950">
-      <div className="flex h-10 shrink-0 items-center border-b border-gray-800 px-4">
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-gray-800 px-4">
         <h2 className="text-xs font-medium uppercase tracking-wide text-gray-400">
           Editor
         </h2>
+        <button
+          type="button"
+          title="Download all files as project.zip"
+          onClick={() => downloadZip(files, folders)}
+          className="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-800 hover:text-white"
+        >
+          ⇩ Download all (.zip)
+        </button>
       </div>
 
       <div className="flex min-h-0 flex-1">
@@ -46,19 +55,26 @@ function CodeEditorPanel({
 
         <div className="flex min-w-0 flex-1 flex-col">
           {activeFile && (
-            <div
-              title={activeFile.name}
-              className="flex h-9 shrink-0 items-center border-b border-gray-800 bg-gray-900 px-4 font-mono text-sm"
-            >
+            <div className="flex h-9 shrink-0 items-center gap-2 border-b border-gray-800 bg-gray-900 px-4">
               {/* "css/theme.css" -> folder part dimmed, file name highlighted */}
-              {activeFile.name.includes('/') && (
-                <span className="truncate text-gray-500">
-                  {activeFile.name.slice(0, activeFile.name.lastIndexOf('/') + 1)}
+              <div title={activeFile.name} className="flex min-w-0 flex-1 font-mono text-sm">
+                {activeFile.name.includes('/') && (
+                  <span className="truncate text-gray-500">
+                    {activeFile.name.slice(0, activeFile.name.lastIndexOf('/') + 1)}
+                  </span>
+                )}
+                <span className="shrink-0 text-gray-100">
+                  {activeFile.name.slice(activeFile.name.lastIndexOf('/') + 1)}
                 </span>
-              )}
-              <span className="shrink-0 text-gray-100">
-                {activeFile.name.slice(activeFile.name.lastIndexOf('/') + 1)}
-              </span>
+              </div>
+              <button
+                type="button"
+                title="Download this file"
+                onClick={() => downloadFile(activeFile)}
+                className="shrink-0 rounded px-2 py-0.5 text-xs text-gray-400 hover:bg-gray-800 hover:text-white"
+              >
+                ⇩ Download
+              </button>
             </div>
           )}
 
