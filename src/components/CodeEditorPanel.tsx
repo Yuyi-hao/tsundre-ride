@@ -4,12 +4,23 @@ import FileExplorer from './FileExplorer'
 
 interface CodeEditorPanelProps {
   files: CodeFile[]
+  folders: string[]
   activeFileName: string
   onSelectFile: (name: string) => void
   onChangeFile: (name: string, content: string) => void
+  onAddFile: (path: string) => string | null
+  onAddFolder: (path: string) => string | null
 }
 
-function CodeEditorPanel({ files, activeFileName, onSelectFile, onChangeFile }: CodeEditorPanelProps) {
+function CodeEditorPanel({
+  files,
+  folders,
+  activeFileName,
+  onSelectFile,
+  onChangeFile,
+  onAddFile,
+  onAddFolder,
+}: CodeEditorPanelProps) {
   const activeFile = files.find((file) => file.name === activeFileName)
 
   return (
@@ -23,8 +34,11 @@ function CodeEditorPanel({ files, activeFileName, onSelectFile, onChangeFile }: 
       <div className="flex min-h-0 flex-1">
         <FileExplorer
           files={files}
+          folders={folders}
           activeFileName={activeFileName}
           onSelectFile={onSelectFile}
+          onAddFile={onAddFile}
+          onAddFolder={onAddFolder}
         />
 
         <div className="min-w-0 flex-1">

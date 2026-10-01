@@ -8,9 +8,18 @@ interface PreviewPanelProps {
 function PreviewPanel({ files }: PreviewPanelProps){
     const [reloadKey, setReloadKey] = useState(0)
 
-    const html = files.find((file) => file.type === 'html')?.content ?? ''
-    const css = files.find((file) => file.type === 'css')?.content ?? ''
-    const js = files.find((file) => file.type === 'javascript')?.content ?? ''
+    // The page is index.html; every CSS and JS file in the project is included.
+    const htmlFile = files.find((file) => file.name === 'index.html') ?? files.find((file) => file.type === 'html')
+    const html = htmlFile?.content ?? ''
+    const css = files
+        .filter((file) => file.type === 'css')
+        .map((file) => file.content)
+        .join('\n')
+    // One <script> per file, so an error in one file doesn't stop the others.
+    const scripts = files
+        .filter((file) => file.type === 'javascript')
+        .map((file) => `<script>${file.content}</script>`)
+        .join('\n')
 
     const srcDoc = `<!doctype html>
 <html>
@@ -20,7 +29,7 @@ function PreviewPanel({ files }: PreviewPanelProps){
   </head>
   <body>
     ${html}
-    <script>${js}</script>
+    ${scripts}
   </body>
 </html>`
 
