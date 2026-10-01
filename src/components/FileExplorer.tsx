@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import type { FormEvent } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
+import { getFileType } from '../types/file'
 import type { CodeFile } from '../types/file'
 
 interface FileExplorerProps {
@@ -9,6 +10,16 @@ interface FileExplorerProps {
   onSelectFile: (name: string) => void
   onAddFile: (path: string) => string | null
   onAddFolder: (path: string) => string | null
+  onUploadFiles: (uploaded: CodeFile[]) => void
+}
+
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
 }
 
 // "css/base/theme.css" -> "css/base"
@@ -29,10 +40,12 @@ function FileExplorer({
   onSelectFile,
   onAddFile,
   onAddFolder,
+  onUploadFiles,
 }: FileExplorerProps) {
   const [creating, setCreating] = useState<'file' | 'folder' | null>(null)
   const [newPath, setNewPath] = useState('')
   const [error, setError] = useState('')
+  const [uploadMessage, setUploadMessage] = useState('')
 
   // Every folder: the empty ones plus every parent folder of every file.
   const allFolders = new Set<string>()
@@ -58,6 +71,30 @@ function FileExplorer({
     } else {
       setCreating(null)
     }
+  }
+
+  async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(event.target.files ?? [])
+    event.target.value = '' // lets the same file be uploaded again
+
+    const uploaded: CodeFile[] = []
+    let skipped = 0
+
+    for (const file of selected) {
+      // Folder uploads keep their structure, e.g. "my-site/css/main.css"
+      const path = file.webkitRelativePath || file.name
+      const type = getFileType(path)
+      if (!type) {
+        skipped++
+        continue
+      }
+
+      const content = type === 'image' ? await readAsDataUrl(file) : await file.text()
+      uploaded.push({ name: path, type, content })
+    }
+
+    onUploadFiles(uploaded)
+    setUploadMessage(skipped > 0 ? `Skipped ${skipped} unsupported file(s)` : '')
   }
 
   // Renders the folders and files directly inside `parent`, then recurses into each folder.
@@ -149,6 +186,24 @@ function FileExplorer({
           </button>
         </div>
       </div>
+
+      <div className="flex gap-1 px-3 pb-2">
+        <label className="cursor-pointer rounded px-1.5 text-xs text-gray-400 hover:bg-gray-800 hover:text-white">
+          ⇪ Upload files
+          <input type="file" multiple onChange={handleUpload} className="hidden" />
+        </label>
+        <label className="cursor-pointer rounded px-1.5 text-xs text-gray-400 hover:bg-gray-800 hover:text-white">
+          ⇪ Upload folder
+          <input
+            type="file"
+            // webkitdirectory isn't in React's types, so it's set directly on the element
+            ref={(input) => input?.setAttribute('webkitdirectory', '')}
+            onChange={handleUpload}
+            className="hidden"
+          />
+        </label>
+      </div>
+      {uploadMessage && <p className="px-4 pb-2 text-xs text-yellow-500">{uploadMessage}</p>}
 
       {creating && (
         <form onSubmit={handleSubmit} className="px-3 pb-2">

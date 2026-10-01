@@ -10,6 +10,7 @@ interface CodeEditorPanelProps {
   onChangeFile: (name: string, content: string) => void
   onAddFile: (path: string) => string | null
   onAddFolder: (path: string) => string | null
+  onUploadFiles: (uploaded: CodeFile[]) => void
 }
 
 function CodeEditorPanel({
@@ -20,6 +21,7 @@ function CodeEditorPanel({
   onChangeFile,
   onAddFile,
   onAddFolder,
+  onUploadFiles,
 }: CodeEditorPanelProps) {
   const activeFile = files.find((file) => file.name === activeFileName)
 
@@ -39,10 +41,21 @@ function CodeEditorPanel({
           onSelectFile={onSelectFile}
           onAddFile={onAddFile}
           onAddFolder={onAddFolder}
+          onUploadFiles={onUploadFiles}
         />
 
         <div className="min-w-0 flex-1">
-          {activeFile && (
+          {activeFile?.type === 'image' && (
+            <div className="flex h-full items-center justify-center p-4">
+              <img
+                src={activeFile.content}
+                alt={activeFile.name}
+                className="max-h-full max-w-full object-contain"
+              />
+            </div>
+          )}
+
+          {activeFile && activeFile.type !== 'image' && (
             <Editor
               height="100%"
               theme="vs-dark"

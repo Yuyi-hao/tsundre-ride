@@ -2,15 +2,26 @@ import { useState } from 'react'
 import Header from '../components/Header'
 import PreviewPanel from '../components/PreviewPanel'
 import EditorPanel from '../components/CodeEditorPanel'
-import type { CodeFile, FileType } from '../types/file'
+import { getFileType } from '../types/file'
+import type { CodeFile } from '../types/file'
 
 const initialFiles: CodeFile[] = [
   {
     name: 'index.html',
     type: 'html',
-    content: `<h1>change, world!</h1>
-<p>Edit the files to get started.</p>
-<button id="btn">Click me</button>`,
+    content: `<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <h1>change, world!</h1>
+    <p>Edit the files to get started.</p>
+    <button id="btn">Click me</button>
+
+    <script src="script.js"></script>
+  </body>
+</html>`,
   },
   {
     name: 'style.css',
@@ -32,13 +43,6 @@ h1 {
 })`,
   },
 ]
-
-function getFileType(path: string): FileType | null {
-  if (path.endsWith('.html')) return 'html'
-  if (path.endsWith('.css')) return 'css'
-  if (path.endsWith('.js')) return 'javascript'
-  return null
-}
 
 // " /css/theme.css/ " -> "css/theme.css"
 function cleanPath(path: string) {
@@ -63,7 +67,8 @@ function CodingWorkspace() {
     if (path.split('/').some((part) => part === '')) return 'Invalid path'
 
     const type = getFileType(path)
-    if (!type) return 'File must end in .html, .css or .js'
+    // Images can only be uploaded, not created empty
+    if (!type || type === 'image') return 'File must end in .html, .css or .js'
     if (files.some((file) => file.name === path) || folders.includes(path)) {
       return 'That name already exists'
     }
@@ -86,6 +91,17 @@ function CodingWorkspace() {
     return null
   }
 
+  // Uploaded files replace existing files with the same path.
+  function uploadFiles(uploaded: CodeFile[]) {
+    if (uploaded.length === 0) return
+
+    setFiles((prevFiles) => [
+      ...prevFiles.filter((file) => !uploaded.some((newFile) => newFile.name === file.name)),
+      ...uploaded,
+    ])
+    setActiveFileName(uploaded[0].name)
+  }
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-gray-950">
       <Header />
@@ -99,6 +115,7 @@ function CodingWorkspace() {
           onChangeFile={updateFileContent}
           onAddFile={addFile}
           onAddFolder={addFolder}
+          onUploadFiles={uploadFiles}
         />
         <PreviewPanel files={files} />
       </main>
