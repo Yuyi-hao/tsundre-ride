@@ -1,9 +1,8 @@
 import './App.css'
+import CodingWorkspace from './pages/codingWorkspace'
 
 function App() {
-  return <>
-  <h1>tsundre~ride</h1>
-  </>
+  return <CodingWorkspace />
 }
 
 export default App
