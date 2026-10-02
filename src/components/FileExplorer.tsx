@@ -8,9 +8,11 @@ interface FileExplorerProps {
   folders: string[]
   activeFileName: string
   onSelectFile: (name: string) => void
-  onAddFile: (path: string) => string | null
-  onAddFolder: (path: string) => string | null
-  onUploadFiles: (uploaded: CodeFile[]) => void
+  onAddFile?: (path: string) => string | null
+  onAddFolder?: (path: string) => string | null
+  onUploadFiles?: (uploaded: CodeFile[]) => void
+  // Hides every create/upload control
+  readOnly?: boolean
 }
 
 function readAsDataUrl(file: File): Promise<string> {
@@ -41,6 +43,7 @@ function FileExplorer({
   onAddFile,
   onAddFolder,
   onUploadFiles,
+  readOnly = false,
 }: FileExplorerProps) {
   const [creating, setCreating] = useState<'file' | 'folder' | null>(null)
   const [newPath, setNewPath] = useState('')
@@ -65,7 +68,7 @@ function FileExplorer({
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    const result = creating === 'file' ? onAddFile(newPath) : onAddFolder(newPath)
+    const result = (creating === 'file' ? onAddFile?.(newPath) : onAddFolder?.(newPath)) ?? null
     if (result) {
       setError(result)
     } else {
@@ -93,7 +96,7 @@ function FileExplorer({
       uploaded.push({ name: path, type, content })
     }
 
-    onUploadFiles(uploaded)
+    onUploadFiles?.(uploaded)
     setUploadMessage(skipped > 0 ? `Skipped ${skipped} unsupported file(s)` : '')
   }
 
@@ -115,7 +118,7 @@ function FileExplorer({
             >
               <span className="truncate">{getBaseName(folder)}/</span>
               {/* Always visible on touch-sized screens (no hover there), hover-only on sm+ */}
-              <span className="flex gap-1 sm:hidden sm:group-hover:flex">
+              <span className={readOnly ? 'hidden' : 'flex gap-1 sm:hidden sm:group-hover:flex'}>
                 <button
                   type="button"
                   title="New file in folder"
@@ -168,7 +171,7 @@ function FileExplorer({
         <h3 className="text-xs font-medium uppercase tracking-wide text-gray-500">
           Files
         </h3>
-        <div className="flex gap-1">
+        <div className={readOnly ? 'hidden' : 'flex gap-1'}>
           <button
             type="button"
             title="New file"
@@ -188,7 +191,7 @@ function FileExplorer({
         </div>
       </div>
 
-      <div className="flex gap-1 px-3 pb-2">
+      <div className={readOnly ? 'hidden' : 'flex gap-1 px-3 pb-2'}>
         <label className="cursor-pointer rounded px-1.5 text-xs text-gray-400 hover:bg-gray-800 hover:text-white">
           ⇪ Upload files
           <input type="file" multiple onChange={handleUpload} className="hidden" />

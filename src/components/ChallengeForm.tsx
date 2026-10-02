@@ -1,12 +1,28 @@
 import { useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
-import type { ChallengeDetails, TimeUnit } from '../types/challenge'
+import { createChallenge, deleteAsset, getChallenge, updateChallenge, uploadAsset } from '../api/challenges'
+import { errorMessage } from '../api/client'
+import type { ChallengeDetail } from '../types/api'
+import type { TimeUnit } from '../types/challenge'
+import type { CodeFile } from '../types/file'
+import { assetFileTypeFor, codeFileToBlob } from '../utils/assets'
+import { fromSeconds, toSeconds } from '../utils/duration'
 
 interface ChallengeFormProps {
-  // Existing details when editing, null when making a new challenge
-  initial: ChallengeDetails | null
-  onSave: (details: ChallengeDetails) => void
+  // Existing challenge when editing, null when making a new one
+  initial: ChallengeDetail | null
+  // Editor files that can be shared as starter files
+  projectFiles?: CodeFile[]
+  // Called every time the challenge is saved on the server (even if some uploads then fail)
+  onSaved: (challenge: ChallengeDetail) => void
   onClose: () => void
+}
+
+interface PendingUpload {
+  path: string
+  getBlob: () => Promise<Blob>
+  // Set for files picked in the form, so failed ones can be kept for a retry
+  attachment?: File
 }
 
 const inputClass =
@@ -19,16 +35,22 @@ function formatSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-function ChallengeForm({ initial, onSave, onClose }: ChallengeFormProps) {
+function ChallengeForm({ initial, projectFiles = [], onSaved, onClose }: ChallengeFormProps) {
+  const initialDuration = initial ? fromSeconds(initial.duration) : { amount: 2, unit: 'hours' as TimeUnit }
+
+  // Set once the challenge exists on the server, so a retry updates it instead of creating another
+  const [saved, setSaved] = useState<ChallengeDetail | null>(initial)
   const [name, setName] = useState(initial?.name ?? '')
-  const [theme, setTheme] = useState(initial?.theme ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
-  const [duration, setDuration] = useState(initial?.duration ?? 2)
-  const [durationUnit, setDurationUnit] = useState<TimeUnit>(initial?.durationUnit ?? 'hours')
-  const [gracePeriod, setGracePeriod] = useState(initial?.gracePeriod ?? 10)
-  const [gracePeriodUnit, setGracePeriodUnit] = useState<TimeUnit>(initial?.gracePeriodUnit ?? 'minutes')
-  const [solutionVisibility, setSolutionVisibility] = useState(initial?.solutionVisibility ?? 'public')
-  const [attachments, setAttachments] = useState<File[]>(initial?.attachments ?? [])
+  const [duration, setDuration] = useState(initialDuration.amount)
+  const [durationUnit, setDurationUnit] = useState<TimeUnit>(initialDuration.unit)
+  const [isPublicSolution, setIsPublicSolution] = useState(initial?.is_public_solution ?? true)
+  const [attachments, setAttachments] = useState<File[]>([])
+  const [shareProjectFiles, setShareProjectFiles] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const existingAssets = saved?.assets ?? []
 
   function handleAttach(event: ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(event.target.files ?? [])
@@ -40,19 +62,87 @@ function ChallengeForm({ initial, onSave, onClose }: ChallengeFormProps) {
     setAttachments((prev) => prev.filter((_, i) => i !== index))
   }
 
-  function handleSubmit(event: FormEvent) {
+  async function removeExistingAsset(assetSlug: string) {
+    if (!saved) return
+    setError('')
+    try {
+      await deleteAsset(saved.slug, assetSlug)
+      const updated = { ...saved, assets: saved.assets.filter((asset) => asset.slug !== assetSlug) }
+      setSaved(updated)
+      onSaved(updated)
+    } catch (err) {
+      setError(errorMessage(err))
+    }
+  }
+
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    onSave({
+    setIsSaving(true)
+    setError('')
+
+    const input = {
       name: name.trim(),
-      theme: theme.trim(),
       description: description.trim(),
-      duration,
-      durationUnit,
-      gracePeriod,
-      gracePeriodUnit,
-      solutionVisibility,
-      attachments,
-    })
+      duration: toSeconds(duration, durationUnit),
+      is_public_solution: isPublicSolution,
+    }
+
+    let challenge: ChallengeDetail
+    try {
+      challenge = saved ? await updateChallenge(saved.slug, input) : await createChallenge(input)
+    } catch (err) {
+      setError(errorMessage(err))
+      setIsSaving(false)
+      return
+    }
+    setSaved(challenge)
+    onSaved(challenge)
+
+    const uploads: PendingUpload[] = [
+      ...(shareProjectFiles
+        ? projectFiles.map((file) => ({ path: file.name, getBlob: () => codeFileToBlob(file) }))
+        : []),
+      ...attachments.map((file) => ({ path: file.name, getBlob: async () => file, attachment: file })),
+    ]
+
+    const failed: string[] = []
+    const failedAttachments: File[] = []
+    for (const upload of uploads) {
+      try {
+        // Re-uploading editor files replaces the old copy instead of failing with a conflict
+        const existing = challenge.assets.find((asset) => (asset.path || asset.name) === upload.path)
+        if (existing && !upload.attachment) await deleteAsset(challenge.slug, existing.slug)
+        await uploadAsset(challenge.slug, {
+          file: await upload.getBlob(),
+          path: upload.path,
+          fileType: assetFileTypeFor(upload.path),
+        })
+      } catch (err) {
+        failed.push(`${upload.path} (${errorMessage(err)})`)
+        if (upload.attachment) failedAttachments.push(upload.attachment)
+      }
+    }
+
+    if (uploads.length > 0) {
+      // Re-fetch so the asset list matches the server
+      try {
+        challenge = await getChallenge(challenge.slug)
+        setSaved(challenge)
+        onSaved(challenge)
+      } catch {
+        // Not fatal: the challenge itself is saved
+      }
+    }
+
+    setIsSaving(false)
+    if (failed.length > 0) {
+      // Keep only the attachments that didn't make it, so "Save" retries just those
+      setAttachments(failedAttachments)
+      setShareProjectFiles(false)
+      setError(`Challenge saved, but some files failed to upload: ${failed.join(', ')}`)
+      return
+    }
+    onClose()
   }
 
   return (
@@ -63,7 +153,7 @@ function ChallengeForm({ initial, onSave, onClose }: ChallengeFormProps) {
       >
         <div className="flex items-center justify-between border-b border-gray-800 px-5 py-3">
           <h2 className="text-sm font-semibold text-white">
-            {initial ? 'Edit challenge' : 'Make challenge'}
+            {saved ? 'Edit challenge' : 'Make challenge'}
           </h2>
           <button
             type="button"
@@ -82,20 +172,10 @@ function ChallengeForm({ initial, onSave, onClose }: ChallengeFormProps) {
               id="challenge-name"
               required
               autoFocus
+              maxLength={200}
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="e.g. Pricing page in 2 hours"
-              className={inputClass}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="challenge-theme" className={labelClass}>Theme</label>
-            <input
-              id="challenge-theme"
-              value={theme}
-              onChange={(event) => setTheme(event.target.value)}
-              placeholder="e.g. Landing page, dark dashboard, form validation"
               className={inputClass}
             />
           </div>
@@ -112,53 +192,27 @@ function ChallengeForm({ initial, onSave, onClose }: ChallengeFormProps) {
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="challenge-duration" className={labelClass}>Duration</label>
-              <div className="flex gap-2">
-                <input
-                  id="challenge-duration"
-                  type="number"
-                  required
-                  min={1}
-                  value={duration}
-                  onChange={(event) => setDuration(Number(event.target.value))}
-                  className={inputClass}
-                />
-                <select
-                  value={durationUnit}
-                  onChange={(event) => setDurationUnit(event.target.value as TimeUnit)}
-                  className={inputClass}
-                >
-                  <option value="minutes">minutes</option>
-                  <option value="hours">hours</option>
-                  <option value="days">days</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="challenge-grace" className={labelClass}>Grace period after end</label>
-              <div className="flex gap-2">
-                <input
-                  id="challenge-grace"
-                  type="number"
-                  required
-                  min={0}
-                  value={gracePeriod}
-                  onChange={(event) => setGracePeriod(Number(event.target.value))}
-                  className={inputClass}
-                />
-                <select
-                  value={gracePeriodUnit}
-                  onChange={(event) => setGracePeriodUnit(event.target.value as TimeUnit)}
-                  className={inputClass}
-                >
-                  <option value="minutes">minutes</option>
-                  <option value="hours">hours</option>
-                  <option value="days">days</option>
-                </select>
-              </div>
+          <div>
+            <label htmlFor="challenge-duration" className={labelClass}>Duration</label>
+            <div className="flex gap-2 sm:w-1/2">
+              <input
+                id="challenge-duration"
+                type="number"
+                required
+                min={1}
+                value={duration}
+                onChange={(event) => setDuration(Number(event.target.value))}
+                className={inputClass}
+              />
+              <select
+                value={durationUnit}
+                onChange={(event) => setDurationUnit(event.target.value as TimeUnit)}
+                className={inputClass}
+              >
+                <option value="minutes">minutes</option>
+                <option value="hours">hours</option>
+                <option value="days">days</option>
+              </select>
             </div>
           </div>
 
@@ -169,8 +223,8 @@ function ChallengeForm({ initial, onSave, onClose }: ChallengeFormProps) {
                 <input
                   type="radio"
                   name="visibility"
-                  checked={solutionVisibility === 'public'}
-                  onChange={() => setSolutionVisibility('public')}
+                  checked={isPublicSolution}
+                  onChange={() => setIsPublicSolution(true)}
                 />
                 <span>
                   <span className="block text-white">Public</span>
@@ -181,8 +235,8 @@ function ChallengeForm({ initial, onSave, onClose }: ChallengeFormProps) {
                 <input
                   type="radio"
                   name="visibility"
-                  checked={solutionVisibility === 'private'}
-                  onChange={() => setSolutionVisibility('private')}
+                  checked={!isPublicSolution}
+                  onChange={() => setIsPublicSolution(false)}
                 />
                 <span>
                   <span className="block text-white">Private</span>
@@ -194,8 +248,27 @@ function ChallengeForm({ initial, onSave, onClose }: ChallengeFormProps) {
 
           <div>
             <span className={labelClass}>Attachments (optional)</span>
-            {attachments.length > 0 && (
+            {(existingAssets.length > 0 || attachments.length > 0) && (
               <ul className="mb-2 flex flex-col gap-1">
+                {existingAssets.map((asset) => (
+                  <li
+                    key={asset.slug}
+                    className="flex items-center justify-between gap-2 rounded bg-gray-950 px-3 py-1.5 text-sm"
+                  >
+                    <span className="truncate font-mono text-gray-300">{asset.path || asset.name}</span>
+                    <span className="flex shrink-0 items-center gap-2 text-xs text-gray-500">
+                      uploaded
+                      <button
+                        type="button"
+                        onClick={() => removeExistingAsset(asset.slug)}
+                        aria-label={`Delete ${asset.name}`}
+                        className="rounded px-1 hover:bg-gray-800 hover:text-white"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  </li>
+                ))}
                 {attachments.map((file, index) => (
                   <li
                     key={`${file.name}-${index}`}
@@ -222,6 +295,25 @@ function ChallengeForm({ initial, onSave, onClose }: ChallengeFormProps) {
               <input type="file" multiple onChange={handleAttach} className="hidden" />
             </label>
           </div>
+
+          {projectFiles.length > 0 && (
+            <label className="flex cursor-pointer items-start gap-2 text-sm text-gray-300">
+              <input
+                type="checkbox"
+                checked={shareProjectFiles}
+                onChange={(event) => setShareProjectFiles(event.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                Upload the {projectFiles.length} editor file(s) as starter files
+                <span className="block text-xs text-gray-500">
+                  Challengers start with these files open in their editor.
+                </span>
+              </span>
+            </label>
+          )}
+
+          {error && <p className="rounded bg-red-950/50 px-3 py-2 text-xs text-red-300">{error}</p>}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-gray-800 px-5 py-3">
@@ -234,9 +326,10 @@ function ChallengeForm({ initial, onSave, onClose }: ChallengeFormProps) {
           </button>
           <button
             type="submit"
-            className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500"
+            disabled={isSaving}
+            className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
           >
-            Save challenge
+            {isSaving ? 'Saving…' : saved ? 'Save changes' : 'Publish challenge'}
           </button>
         </div>
       </form>

@@ -8,10 +8,12 @@ interface CodeEditorPanelProps {
   folders: string[]
   activeFileName: string
   onSelectFile: (name: string) => void
-  onChangeFile: (name: string, content: string) => void
-  onAddFile: (path: string) => string | null
-  onAddFolder: (path: string) => string | null
-  onUploadFiles: (uploaded: CodeFile[]) => void
+  // Leave these out (with readOnly) to only view files, e.g. a submission
+  onChangeFile?: (name: string, content: string) => void
+  onAddFile?: (path: string) => string | null
+  onAddFolder?: (path: string) => string | null
+  onUploadFiles?: (uploaded: CodeFile[]) => void
+  readOnly?: boolean
 }
 
 function CodeEditorPanel({
@@ -23,6 +25,7 @@ function CodeEditorPanel({
   onAddFile,
   onAddFolder,
   onUploadFiles,
+  readOnly = false,
 }: CodeEditorPanelProps) {
   const activeFile = files.find((file) => file.name === activeFileName)
 
@@ -52,6 +55,7 @@ function CodeEditorPanel({
           onAddFile={onAddFile}
           onAddFolder={onAddFolder}
           onUploadFiles={onUploadFiles}
+          readOnly={readOnly}
         />
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -97,8 +101,9 @@ function CodeEditorPanel({
                 path={activeFile.name}
                 language={activeFile.type}
                 value={activeFile.content}
-                onChange={(value) => onChangeFile(activeFile.name, value ?? '')}
+                onChange={(value) => onChangeFile?.(activeFile.name, value ?? '')}
                 options={{
+                  readOnly,
                   fontSize: 14,
                   minimap: { enabled: false },
                   automaticLayout: true,

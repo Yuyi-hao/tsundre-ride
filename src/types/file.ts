@@ -8,7 +8,7 @@ export interface CodeFile{
     content: string
 };
 
-const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico']
+const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.jfif', '.pjpeg', '.pjp', '.gif', '.svg', '.webp', '.avif', '.bmp', '.ico']
 
 export function getFileType(path: string): FileType | null {
     const lower = path.toLowerCase()
