@@ -27,7 +27,7 @@ function CodeEditorPanel({
   const activeFile = files.find((file) => file.name === activeFileName)
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col bg-gray-950">
+    <section className="flex h-[80vh] min-w-0 flex-col bg-gray-950 md:h-auto md:flex-1">
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-gray-800 px-4">
         <h2 className="text-xs font-medium uppercase tracking-wide text-gray-400">
           Editor
@@ -38,11 +38,12 @@ function CodeEditorPanel({
           onClick={() => downloadZip(files, folders)}
           className="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-800 hover:text-white"
         >
-          ⇩ Download all (.zip)
+          ⇩ Download all<span className="hidden sm:inline"> (.zip)</span>
         </button>
       </div>
 
-      <div className="flex min-h-0 flex-1">
+      {/* Small screens: file list above the editor. sm+: file list on the left. */}
+      <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
         <FileExplorer
           files={files}
           folders={folders}

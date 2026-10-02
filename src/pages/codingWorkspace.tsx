@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import ChallengeForm from '../components/ChallengeForm'
 import Header from '../components/Header'
 import PreviewPanel from '../components/PreviewPanel'
 import EditorPanel from '../components/CodeEditorPanel'
 import { getFileType } from '../types/file'
 import type { CodeFile } from '../types/file'
+import type { ChallengeDetails } from '../types/challenge'
 
 const initialFiles: CodeFile[] = [
   {
@@ -49,8 +51,15 @@ function cleanPath(path: string) {
   return path.trim().replace(/^\/+|\/+$/g, '')
 }
 
-function CodingWorkspace() {
+interface CodingWorkspaceProps {
+  // True on /create: open the "Make challenge" form right away
+  startWithChallengeForm?: boolean
+}
+
+function CodingWorkspace({ startWithChallengeForm = false }: CodingWorkspaceProps) {
   const [files, setFiles] = useState<CodeFile[]>(initialFiles)
+  const [challenge, setChallenge] = useState<ChallengeDetails | null>(null)
+  const [isChallengeFormOpen, setIsChallengeFormOpen] = useState(startWithChallengeForm)
   // Only needed for empty folders. Folders that contain files come from the file paths.
   const [folders, setFolders] = useState<string[]>([])
   const [activeFileName, setActiveFileName] = useState('index.html')
@@ -102,11 +111,41 @@ function CodingWorkspace() {
     setActiveFileName(uploaded[0].name)
   }
 
-  return (
-    <div className="flex h-screen flex-col overflow-hidden bg-gray-950">
-      <Header />
+  function saveChallenge(details: ChallengeDetails) {
+    setChallenge(details)
+    setIsChallengeFormOpen(false)
+  }
 
-      <main className="flex min-h-0 flex-1">
+  return (
+    // Mobile: the page scrolls and the panels stack. Desktop (md+): fixed full-screen, side by side.
+    <div className="flex min-h-screen flex-col bg-gray-950 md:h-screen md:overflow-hidden">
+      <Header>
+        {challenge && (
+          <span className="hidden min-w-0 truncate text-sm text-gray-300 sm:inline">
+            {challenge.name}
+            <span className="text-gray-500">
+              {' '}· {challenge.duration} {challenge.durationUnit}
+            </span>
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => setIsChallengeFormOpen(true)}
+          className="shrink-0 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
+        >
+          {challenge ? 'Edit challenge' : 'Make challenge'}
+        </button>
+      </Header>
+
+      {isChallengeFormOpen && (
+        <ChallengeForm
+          initial={challenge}
+          onSave={saveChallenge}
+          onClose={() => setIsChallengeFormOpen(false)}
+        />
+      )}
+
+      <main className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">
         <EditorPanel
           files={files}
           folders={folders}

@@ -114,7 +114,8 @@ function FileExplorer({
               className="group flex items-center justify-between py-1.5 pr-2 font-mono text-sm text-gray-300"
             >
               <span className="truncate">{getBaseName(folder)}/</span>
-              <span className="hidden gap-1 group-hover:flex">
+              {/* Always visible on touch-sized screens (no hover there), hover-only on sm+ */}
+              <span className="flex gap-1 sm:hidden sm:group-hover:flex">
                 <button
                   type="button"
                   title="New file in folder"
@@ -162,7 +163,7 @@ function FileExplorer({
   }
 
   return (
-    <nav className="flex w-56 shrink-0 flex-col overflow-y-auto border-r border-gray-800 bg-gray-950">
+    <nav className="flex max-h-48 w-full shrink-0 flex-col overflow-y-auto border-b border-gray-800 bg-gray-950 sm:max-h-none sm:w-56 sm:border-b-0 sm:border-r">
       <div className="flex items-center justify-between px-4 pb-2 pt-3">
         <h3 className="text-xs font-medium uppercase tracking-wide text-gray-500">
           Files
